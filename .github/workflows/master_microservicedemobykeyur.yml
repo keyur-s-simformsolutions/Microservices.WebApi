@@ -1,6 +1,3 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
 name: Build and deploy ASP.Net Core app to Azure Web App - microservicedemobykeyur
 
 on:
@@ -10,48 +7,121 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build_and_deploy_customer_microservice:
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up .NET Core
+      - name: Set up .NET Core - Customer Microservice
         uses: actions/setup-dotnet@v1
         with:
           dotnet-version: '6.0.x'
           include-prerelease: true
 
-      - name: Build with dotnet
-        run: dotnet build --configuration Release
+      - name: Build and publish Customer Microservice
+        run: |
+          dotnet build Customer.Microservice/Customer.Microservice.csproj --configuration Release
+          dotnet publish Customer.Microservice/Customer.Microservice.csproj -c Release -o ${{env.DOTNET_ROOT}}/customer_microservice_app
 
-      - name: dotnet publish
-        run: dotnet publish Customer.Microservice/Customer.Microservice.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
-
-      - name: Upload artifact for deployment job
+      - name: Upload artifact for Customer Microservice deployment job
         uses: actions/upload-artifact@v3
         with:
-          name: .net-app
-          path: ${{env.DOTNET_ROOT}}/myapp
+          name: customer-microservice-app
+          path: ${{env.DOTNET_ROOT}}/customer_microservice_app
 
-  deploy:
+  build_and_deploy_product_microservice:
     runs-on: windows-latest
-    needs: build
-    environment:
-      name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
-    
+
     steps:
-      - name: Download artifact from build job
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET Core - Product Microservice
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '6.0.x'
+          include-prerelease: true
+
+      - name: Build and publish Product Microservice
+        run: |
+          dotnet build Product.Microservice/Product.Microservice.csproj --configuration Release
+          dotnet publish Product.Microservice/Product.Microservice.csproj -c Release -o ${{env.DOTNET_ROOT}}/product_microservice_app
+
+      - name: Upload artifact for Product Microservice deployment job
+        uses: actions/upload-artifact@v3
+        with:
+          name: product-microservice-app
+          path: ${{env.DOTNET_ROOT}}/product_microservice_app
+
+  build_and_deploy_gateway_microservice:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET Core - Another Microservice
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '6.0.x'
+          include-prerelease: true
+
+      - name: Build and publish Another Microservice
+        run: |
+          dotnet build GateWay.WebApi/GateWay.WebApi.csproj --configuration Release
+          dotnet publish GateWay.WebApi/GateWay.WebApi.csproj -c Release -o ${{env.DOTNET_ROOT}}/another_microservice_app
+
+      - name: Upload artifact for Another Microservice deployment job
+        uses: actions/upload-artifact@v3
+        with:
+          name: another-microservice-app
+          path: ${{env.DOTNET_ROOT}}/another_microservice_app
+
+  deploy_all_microservices:
+    runs-on: windows-latest
+    needs:
+      - build_and_deploy_customer_microservice
+      - build_and_deploy_product_microservice
+      - build_and_deploy_gateway_microservice
+
+    steps:
+      - name: Download artifact from Customer Microservice build job
         uses: actions/download-artifact@v3
         with:
-          name: .net-app
-      
-      - name: Deploy to Azure Web App
-        id: deploy-to-webapp
+          name: customer-microservice-app
+
+      - name: Download artifact from Product Microservice build job
+        uses: actions/download-artifact@v3
+        with:
+          name: product-microservice-app
+
+      - name: Download artifact from Another Microservice build job
+        uses: actions/download-artifact@v3
+        with:
+          name: another-microservice-app
+
+      - name: Deploy to Azure Web App - Customer Microservice
+        id: deploy-customer-microservice
         uses: azure/webapps-deploy@v2
         with:
           app-name: 'microservicedemobykeyur'
           slot-name: 'Production'
-          package: .
+          package: ${{ github.workspace }}/customer-microservice-app
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_E6B926F672DC4342BB4AD0CEEDFBF4DA }}
+
+      - name: Deploy to Azure Web App - Product Microservice
+        id: deploy-product-microservice
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'microservicedemobykeyur'
+          slot-name: 'Production'
+          package: ${{ github.workspace }}/product-microservice-app
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_E6B926F672DC4342BB4AD0CEEDFBF4DA }}
+
+      - name: Deploy to Azure Web App - Another Microservice
+        id: deploy-another-microservice
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'microservicedemobykeyur'
+          slot-name: 'Production'
+          package: ${{ github.workspace }}/another-microservice-app
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_E6B926F672DC4342BB4AD0CEEDFBF4DA }}
